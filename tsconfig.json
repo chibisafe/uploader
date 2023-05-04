@@ -8,8 +8,6 @@
 		"module": "CommonJS",
 		"jsx": "preserve",
 		"lib": ["esnext", "dom"],
-		"rootDir": "./src",
-		"outDir": "./lib",
 		"sourceRoot": "./",
 		"resolveJsonModule": true,
 		"skipLibCheck": true,
