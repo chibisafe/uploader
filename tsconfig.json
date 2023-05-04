@@ -1,0 +1,21 @@
+{
+	"compilerOptions": {
+		"moduleResolution": "Node",
+		"esModuleInterop": true,
+		"sourceMap": true,
+		"strict": true,
+		"declaration": true,
+		"module": "CommonJS",
+		"jsx": "preserve",
+		"lib": ["esnext", "dom"],
+		"rootDir": "./src",
+		"outDir": "./lib",
+		"sourceRoot": "./",
+		"resolveJsonModule": true,
+		"skipLibCheck": true,
+		"baseUrl": "."
+	},
+	"exlude": [
+		"node_modules"
+	]
+}
