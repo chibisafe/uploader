@@ -298,6 +298,7 @@ export const processFile = async (req: IncomingMessage, options: Options) => {
 
 			req.pipe(busboy);
 		} catch (error) {
+			reject(error);
 			console.log(error);
 		}
 	}) as Promise<Result>;
