@@ -105,16 +105,18 @@ export const chibiUploader = async (options: UploaderOptions) => {
 			// @ts-expect-error: headers type
 			for (const key of Object.keys(headers)) xhr.setRequestHeader(key, headers[key]);
 
-			xhr.addEventListener('progress', (event: ProgressEvent) => {
+			xhr.upload.addEventListener('progress', (event: ProgressEvent) => {
 				if (event.lengthComputable) {
 					const percentProgress = ((event.loaded / event.total) * 100) | 0;
 					options.onProgress?.(uuid, percentProgress);
 				}
 			});
-			xhr.addEventListener('error', (event: Event) => {
+
+			xhr.upload.addEventListener('error', (event: Event) => {
 				options.onError?.(uuid, new Error(xhr.response));
 			});
-			xhr.addEventListener('load', (event: Event) => {
+			xhr.upload.addEventListener('load', (event: Event) => {
+				console.log('[ChibiUploader] Upload finished');
 				options.onFinish?.(uuid, { response: xhr.response });
 				return xhr;
 			});
@@ -197,6 +199,10 @@ export const chibiUploader = async (options: UploaderOptions) => {
 		// Send last chunk
 		await actuallySendChunks(await lastChunk!.chunk.arrayBuffer(), uploader.totalChunks);
 
+		// If it's just one chunk the response will be handled by the XHR request
+		if (totalChunks === 1) return;
+
+		// Otherwise send the response
 		console.log('[ChibiUploader] Upload finished');
 		options.onFinish?.(uuid, 'url');
 	};
