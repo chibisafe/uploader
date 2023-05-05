@@ -2,6 +2,7 @@ import http from 'node:http';
 import { processFile } from '../src/index';
 
 http.createServer(async (req, res) => {
+	// Sample CORS configuration, modify as needed
 	res.setHeader('Access-Control-Allow-Origin', 'http://localhost:8001');
 	if (req.url === '/upload' && req.method === 'OPTIONS') {
 		res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
@@ -12,6 +13,7 @@ http.createServer(async (req, res) => {
 		return;
 	}
 
+	// Sample upload endpoint
 	if (req.url === '/upload' && req.method === 'POST') {
 		const maxChunkSize = 90 * 1000 * 1000; // 90MB
 		const maxFileSize = 100 * 1000 * 1000 * 1000; // 100GB
@@ -22,6 +24,21 @@ http.createServer(async (req, res) => {
 			if (upload.isChunkedUpload && !upload.ready) {
 				return res.writeHead(204, 'OK', { 'Content-Type': 'text/plain' }).end();
 			}
+
+			/*
+			 * The response object structure.
+			 * Use this to perform any additional actions after the upload is complete,
+			 * such as moving the file to a different location, or adding it to a database.
+			 * 	{
+			 * 		"isChunkedUpload":false,
+			 * 		"path":"tmp\\62376102-9737-4edb-86d0-7b3b05c4cd91.exe",
+			 * 		"metadata":{
+			 * 			"name":"parsec-windows.exe",
+			 * 			"type":"application/x-msdownload",
+			 * 			"size":"2881040"
+			 * 		}
+			 * 	}
+			 */
 
 			return res.writeHead(201, 'OK', { 'Content-Type': 'application/json' }).end(JSON.stringify(upload));
 		} catch (error: any) {
