@@ -15,8 +15,8 @@ http.createServer(async (req, res) => {
 
 	// Sample upload endpoint
 	if (req.url === '/upload' && req.method === 'POST') {
-		const maxChunkSize = 90 * 1000 * 1000; // 90MB
-		const maxFileSize = 100 * 1000 * 1000 * 1000; // 100GB
+		const maxChunkSize = 90 * 1000 * 1024; // 90MB
+		const maxFileSize = 100 * 1000 * 1000 * 1024; // 100GB
 		const tmpDir = './tmp';
 		try {
 			const upload = await processFile(req, { destination: tmpDir, maxFileSize, maxChunkSize });
@@ -48,6 +48,7 @@ http.createServer(async (req, res) => {
 				case 'Chunk is too big':
 				case 'File is too big':
 					statusCode = 413;
+					break;
 				case 'Missing chibi-* headers':
 				case 'chibi-uuid is not a string':
 				case 'chibi-uuid does not meet the length criteria':
@@ -55,6 +56,7 @@ http.createServer(async (req, res) => {
 				case 'Chunk is out of range':
 				case 'Invalid headers':
 					statusCode = 400;
+					break;
 			}
 
 			return res.writeHead(statusCode, 'OK', { 'Content-Type': 'text/plain' }).end(error.message);

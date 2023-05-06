@@ -60,16 +60,13 @@ const joinChunks = async (finalFile: string, dirPath: string, totalChunks: numbe
 				console.log('> Chunk location:', path.join(dirPath, chunkCount.toString()));
 				const readStream = createReadStream(path.join(dirPath, chunkCount.toString()));
 
-				readStream.on('error', err => {
-					console.log('readStream error');
-					console.error(err);
-					return reject;
+				readStream.on('error', () => {
+					reject(new Error('Error reading chunk'));
 				});
 
 				readStream.on('data', chunk => {
 					if (!chunk) {
-						console.log('chunk is null');
-						return reject;
+						reject(new Error('Chunk is null'));
 					}
 
 					writeStream.write(chunk);
@@ -158,7 +155,11 @@ const handleFileWithChunks = (
 			// If all chunks were uploaded
 			if (chunkCount === totalChunks) {
 				joined = true;
-				await joinChunks(`${filePath}${path.extname(metadata.name)}`, dirPath, totalChunks);
+				try {
+					await joinChunks(`${filePath}${path.extname(metadata.name)}`, dirPath, totalChunks);
+				} catch (error) {
+					console.error(error);
+				}
 			}
 		});
 
