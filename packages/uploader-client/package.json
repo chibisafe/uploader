@@ -5,8 +5,11 @@
 	"main": "lib/index.js",
 	"scripts": {
 		"build": "vite build",
-		"watch": "vite build --watch"
+		"dev": "vite build --watch",
+		"lint": "prettier --check . && cross-env TIMING=1 eslint src --ext .ts",
+		"format": "prettier --write . && cross-env TIMING=1 eslint src --ext .ts --fix"
 	},
+	"type": "module",
 	"author": {
 		"name": "Pitu",
 		"email": "heyitspitu@gmail.com",
@@ -21,6 +24,8 @@
 		"import": "./lib/index.js"
 	},
 	"devDependencies": {
+		"@types/node": "^20.1.0",
+		"cross-env": "^7.0.3",
 		"eslint": "^8.39.0",
 		"eslint-config-neon": "^0.1.42",
 		"prettier": "^2.8.8",

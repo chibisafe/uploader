@@ -1,3 +1,14 @@
 node_modules/
 lib/
-module/tmp
+packages/uploader-module/tmp
+
+# yarn
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+
+.turbo
