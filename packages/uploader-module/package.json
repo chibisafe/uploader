@@ -1,7 +1,7 @@
 {
 	"name": "@chibisafe/uploader-module",
 	"version": "1.0.0",
-	"description": "",
+	"description": "The chibisafe core uploader module",
 	"main": "lib/index.js",
 	"scripts": {
 		"dev": "ts-node test/server.ts",
@@ -9,7 +9,14 @@
 		"lint": "prettier --check . && cross-env TIMING=1 eslint src --ext .ts",
 		"format": "prettier --write . && cross-env TIMING=1 eslint src --ext .ts --fix"
 	},
-	"author": "",
+	"author": {
+		"name": "Pitu",
+		"email": "heyitspitu@gmail.com",
+		"url": "https://github.com/Pitu"
+	},
+	"contributors": [
+		"Crawl <icrawltogo@gmail.com>"
+	],
 	"license": "MIT",
 	"files": [
 		"lib/**/*"
@@ -38,5 +45,15 @@
 	},
 	"volta": {
 		"node": "18.9.0"
-	}
+	},
+	"keywords": [
+		"chibisafe",
+		"uploader",
+		"upload",
+		"file upload",
+		"file uploader",
+		"chunk",
+		"chunked upload",
+		"chunked uploader"
+	]
 }

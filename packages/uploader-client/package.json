@@ -15,6 +15,9 @@
 		"email": "heyitspitu@gmail.com",
 		"url": "https://github.com/Pitu"
 	},
+	"contributors": [
+		"Crawl <icrawltogo@gmail.com>"
+	],
 	"license": "MIT",
 	"files": [
 		"lib/**/*"
@@ -36,5 +39,15 @@
 	},
 	"volta": {
 		"node": "18.9.0"
-	}
+	},
+	"keywords": [
+		"chibisafe",
+		"uploader",
+		"upload",
+		"file upload",
+		"file uploader",
+		"chunk",
+		"chunked upload",
+		"chunked uploader"
+	]
 }
