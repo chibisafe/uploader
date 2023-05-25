@@ -17,6 +17,8 @@ interface Options {
 	destination: string;
 	maxFileSize: number;
 	maxChunkSize: number;
+	allowedExtensions?: string[];
+	blockedExtensions?: string[];
 }
 
 interface Result {
@@ -26,7 +28,7 @@ interface Result {
 	metadata: Record<string, string>;
 }
 
-const checkIfUuid = (headers: IncomingHttpHeaders) => {
+export const checkIfUuid = (headers: IncomingHttpHeaders) => {
 	if (!headers['chibi-uuid']) return false;
 	if (typeof headers['chibi-uuid'] !== 'string') throw new Error('chibi-uuid is not a string');
 	if (headers['chibi-uuid'].length !== 36) throw new Error('chibi-uuid does not meet the length criteria');
@@ -35,12 +37,13 @@ const checkIfUuid = (headers: IncomingHttpHeaders) => {
 	return true;
 };
 
-const checkHeaders = (headers: IncomingHttpHeaders) => {
+export const checkHeaders = (headers: IncomingHttpHeaders) => {
 	return (
-		headers['chibi-chunk-number'] &&
-		headers['chibi-chunks-total'] &&
-		/^\d+$/.test(headers['chibi-chunk-number'] as unknown as string) &&
-		/^\d+$/.test(headers['chibi-chunks-total'] as unknown as string)
+		(headers['chibi-chunk-number'] &&
+			headers['chibi-chunks-total'] &&
+			/^\d+$/.test(headers['chibi-chunk-number'] as unknown as string) &&
+			/^\d+$/.test(headers['chibi-chunks-total'] as unknown as string)) ||
+		false
 	);
 };
 

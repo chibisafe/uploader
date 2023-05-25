@@ -8,6 +8,8 @@ export interface UploaderOptions {
 	retries?: number;
 	delayBeforeRetry?: number;
 	maxParallelUploads: number;
+	allowedExtensions?: string[];
+	blockedExtensions?: string[];
 	onStart?(uuid: string, totalChunks: number): void;
 	onError?(uuid: string, error: Error): void;
 	onProgress?(uuid: string, progress: number): void;
@@ -30,6 +32,20 @@ const validateOptions = (options: UploaderOptions) => {
 		throw new TypeError('delayBeforeRetry must be a positive number');
 };
 
+const validateFileExtension = (file: File, allowedExtensions?: string[], blockedExtensions?: string[]) => {
+	if (allowedExtensions?.length) {
+		const extension = file.name.split('.').pop();
+		if (!extension) throw new Error('File extension could not be determined');
+		if (!allowedExtensions.includes(extension)) throw new Error('File extension is not allowed');
+	}
+
+	if (blockedExtensions?.length) {
+		const extension = file.name.split('.').pop();
+		if (!extension) throw new Error('File extension could not be determined');
+		if (blockedExtensions.includes(extension)) throw new Error('File extension is not allowed');
+	}
+};
+
 export const chibiUploader = async (options: UploaderOptions) => {
 	const {
 		autoStart = true,
@@ -40,10 +56,13 @@ export const chibiUploader = async (options: UploaderOptions) => {
 		chunkSize = 90,
 		retries = 5,
 		delayBeforeRetry = 3,
-		maxParallelUploads = 3
+		maxParallelUploads = 3,
+		allowedExtensions = [],
+		blockedExtensions = []
 	} = options;
 
 	validateOptions(options);
+	validateFileExtension(options.file, allowedExtensions, blockedExtensions);
 
 	const totalChunks = Math.ceil(file.size / (chunkSize * 1000 * 1000));
 	const uuid = globalThis.crypto.randomUUID();
