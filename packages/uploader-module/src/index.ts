@@ -63,7 +63,7 @@ const joinChunks = async (finalFile: string, dirPath: string, totalChunks: numbe
 	return new Promise((resolve, reject) => {
 		const pipeChunk = async () => {
 			try {
-				if (DEBUG) console.log('> Chunk location:', path.join(dirPath, chunkCount.toString()));
+				if (DEBUG) console.log('> Chunk file:', path.join(dirPath, chunkCount.toString()));
 				const readStream = createReadStream(path.join(dirPath, chunkCount.toString()));
 
 				readStream.on('error', () => {
@@ -292,14 +292,22 @@ export const processFile = async (req: IncomingMessage, options: Options) => {
 					if (DEBUG) console.log('> Done:', metadata.name);
 
 					if (usingChunks) {
+						let filePath;
+						if (resultPromise) {
+							filePath = `${resultPromise}${path.extname(metadata.name)}`;
+							if (DEBUG) console.log('> Filename:', filePath);
+						}
+
 						resolve({
 							isChunkedUpload: true,
 							ready: Boolean(resultPromise),
-							path: resultPromise ? resultPromise : null,
+							path: resultPromise ? filePath : undefined,
 							metadata
 						});
 						return;
 					}
+
+					if (DEBUG) console.log('> Filename:', resultPromise.path);
 
 					resolve({
 						isChunkedUpload: false,
