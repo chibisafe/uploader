@@ -10,12 +10,16 @@ export interface UploaderOptions {
 	maxParallelUploads: number;
 	allowedExtensions?: string[];
 	blockedExtensions?: string[];
+	DEBUG: boolean;
 	onStart?(uuid: string, totalChunks: number): void;
 	onError?(uuid: string, error: Error): void;
 	onProgress?(uuid: string, progress: number): void;
 	onRetry?(uuid: string, obj: any): void;
 	onFinish?(uuid: string, obj: any): void;
 }
+
+let DEBUG = false;
+let StopUploadsBecauseError = false;
 
 const validateOptions = (options: UploaderOptions) => {
 	if (!options.endpoint?.length) throw new TypeError('endpoint must be defined');
@@ -60,6 +64,9 @@ export const chibiUploader = async (options: UploaderOptions) => {
 		allowedExtensions = [],
 		blockedExtensions = []
 	} = options;
+
+	DEBUG = Boolean(options.DEBUG);
+	StopUploadsBecauseError = false;
 
 	validateOptions(options);
 	validateFileExtension(options.file, allowedExtensions, blockedExtensions);
@@ -135,7 +142,7 @@ export const chibiUploader = async (options: UploaderOptions) => {
 				options.onError?.(uuid, new Error(xhr.response));
 			});
 			xhr.upload.addEventListener('load', (event: Event) => {
-				console.log('[ChibiUploader] Upload finished');
+				if (DEBUG) console.log('[ChibiUploader] Upload finished');
 				options.onFinish?.(uuid, { response: xhr.response });
 				return xhr;
 			});
@@ -169,6 +176,11 @@ export const chibiUploader = async (options: UploaderOptions) => {
 	};
 
 	const actuallySendChunks = async (chunk: ArrayBuffer, index: number) => {
+		if (StopUploadsBecauseError) {
+			console.log('Skipping because of an error');
+			return;
+		}
+
 		try {
 			const response = await sendChunk(chunk, index);
 			if (!response) return;
@@ -177,12 +189,16 @@ export const chibiUploader = async (options: UploaderOptions) => {
 					// Calculate the progress based on the filesize, the total amount of chunks and the chunk index
 					const percentProgress = Math.round((100 / uploader.totalChunks) * index);
 					options.onProgress?.(uuid, percentProgress);
-					console.log('[ChibiUploader] Progress:', percentProgress, '%');
+					if (DEBUG) console.log('[ChibiUploader] Progress:', percentProgress, '%');
 				}
 			} else if ([408, 502, 503, 504].includes(response.status)) {
 				if (uploader.paused || uploader.offline) return;
-				console.log('408, 502, 503, 504');
+				if (DEBUG) console.log('408, 502, 503, 504');
 				manageRetries(index);
+			} else if (response.status === 413) {
+				options.onError?.(uuid, new Error(`Chunks are too big. Stopping upload`));
+				// eslint-disable-next-line require-atomic-updates
+				StopUploadsBecauseError = true;
 			} else {
 				if (uploader.paused || uploader.offline) return;
 				options.onError?.(uuid, new Error(`Server responded with ${response.status}. Stopping upload`));
@@ -190,7 +206,7 @@ export const chibiUploader = async (options: UploaderOptions) => {
 		} catch (error: any) {
 			if (uploader.paused || uploader.offline) return;
 			console.log(error);
-			console.log('outer catch');
+			if (DEBUG) console.log('outer catch');
 			manageRetries(index);
 		}
 	};
@@ -222,7 +238,7 @@ export const chibiUploader = async (options: UploaderOptions) => {
 		if (totalChunks === 1) return;
 
 		// Otherwise send the response
-		console.log('[ChibiUploader] Upload finished');
+		if (DEBUG) console.log('[ChibiUploader] Upload finished');
 		options.onFinish?.(uuid, 'url');
 	};
 
