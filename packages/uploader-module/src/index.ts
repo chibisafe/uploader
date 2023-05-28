@@ -19,6 +19,7 @@ interface Options {
 	maxChunkSize: number;
 	allowedExtensions?: string[];
 	blockedExtensions?: string[];
+	DEBUG?: boolean;
 }
 
 interface Result {
@@ -27,6 +28,8 @@ interface Result {
 	path?: string;
 	metadata: Record<string, string>;
 }
+
+let DEBUG = false;
 
 export const checkIfUuid = (headers: IncomingHttpHeaders) => {
 	if (!headers['chibi-uuid']) return false;
@@ -52,7 +55,7 @@ const isBiggerThanMaxSize = (maxFileSize: number, maxChunkSize: number, totalChu
 };
 
 const joinChunks = async (finalFile: string, dirPath: string, totalChunks: number) => {
-	console.log('> Attempting to join chunks');
+	if (DEBUG) console.log('> Attempting to join chunks');
 	const writeStream = createWriteStream(finalFile);
 
 	let chunkCount = 1;
@@ -60,7 +63,7 @@ const joinChunks = async (finalFile: string, dirPath: string, totalChunks: numbe
 	return new Promise((resolve, reject) => {
 		const pipeChunk = async () => {
 			try {
-				console.log('> Chunk location:', path.join(dirPath, chunkCount.toString()));
+				if (DEBUG) console.log('> Chunk location:', path.join(dirPath, chunkCount.toString()));
 				const readStream = createReadStream(path.join(dirPath, chunkCount.toString()));
 
 				readStream.on('error', () => {
@@ -81,7 +84,8 @@ const joinChunks = async (finalFile: string, dirPath: string, totalChunks: numbe
 						await pipeChunk();
 					} else {
 						writeStream.end();
-						// await jetpack.removeAsync(dirPath);
+						if (DEBUG) console.log('> All chunks joined, deleting temp folder', dirPath);
+						await jetpack.removeAsync(dirPath);
 						resolve({ path: finalFile });
 					}
 				});
@@ -191,11 +195,15 @@ const handleFileWithChunks = (
 };
 
 export const processFile = async (req: IncomingMessage, options: Options) => {
+	if (options.DEBUG) {
+		DEBUG = true;
+	}
+
 	// Make sure the destination folder exists
 	await jetpack.dirAsync(options.destination);
 
-	console.log('');
-	console.log('> Received new file');
+	if (DEBUG) console.log('');
+	if (DEBUG) console.log('> Received new file');
 
 	return new Promise((resolve, reject) => {
 		// Determine if we're using chunks or not
@@ -214,17 +222,18 @@ export const processFile = async (req: IncomingMessage, options: Options) => {
 
 		let uuid: string;
 		if (usingChunks) {
-			console.log('> Type: Chunked upload');
-			console.log('> UUID:', req.headers['chibi-uuid'] as string);
-			console.log(
-				`> Chunk number: ${req.headers['chibi-chunk-number'] as string}/${
-					req.headers['chibi-chunks-total'] as string
-				}`
-			);
+			if (DEBUG) console.log('> Type: Chunked upload');
+			if (DEBUG) console.log('> UUID:', req.headers['chibi-uuid'] as string);
+			if (DEBUG)
+				console.log(
+					`> Chunk number: ${req.headers['chibi-chunk-number'] as string}/${
+						req.headers['chibi-chunks-total'] as string
+					}`
+				);
 		} else {
 			uuid = uuidv4();
-			console.log('> Type: Single file upload');
-			console.log('> UUID:', uuid);
+			if (DEBUG) console.log('> Type: Single file upload');
+			if (DEBUG) console.log('> UUID:', uuid);
 		}
 
 		try {
@@ -236,7 +245,7 @@ export const processFile = async (req: IncomingMessage, options: Options) => {
 
 			busboy.on('file', (fieldname, fileStream) => {
 				// File name only appears on the last chunk
-				if (metadata.name) console.log(`> Name:`, metadata.name);
+				if (DEBUG && metadata.name) console.log(`> Name:`, metadata.name);
 
 				// Triggered when file is too big
 				fileStream.on('limit', () => {
@@ -280,7 +289,7 @@ export const processFile = async (req: IncomingMessage, options: Options) => {
 						return;
 					}
 
-					console.log('> Done:', metadata.name);
+					if (DEBUG) console.log('> Done:', metadata.name);
 
 					if (usingChunks) {
 						resolve({
