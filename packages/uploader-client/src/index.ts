@@ -141,14 +141,24 @@ export const chibiUploader = async (options: UploaderOptions) => {
 			xhr.upload.addEventListener('error', (event: Event) => {
 				options.onError?.(uuid, new Error(xhr.response));
 			});
-			xhr.upload.addEventListener('load', (event: Event) => {
-				if (DEBUG) console.log('[ChibiUploader] Upload finished');
-				options.onFinish?.(uuid, { response: xhr.response });
-				return xhr;
-			});
+
+			xhr.onreadystatechange = () => {
+				if (xhr.readyState === 4) {
+					if ([200, 201, 204].includes(xhr.status)) {
+						if (DEBUG) console.log('[ChibiUploader] Upload finished');
+						try {
+							const response = JSON.parse(xhr.response);
+							options.onFinish?.(uuid, response);
+						} catch {
+							options.onError?.(uuid, new Error('There was a problem parsing the JSON response'));
+						}
+					} else {
+						options.onError?.(uuid, new Error(xhr.response));
+					}
+				}
+			};
 
 			xhr.send(form);
-			// return xhr;
 		} else {
 			form.append('file', new Blob([chunk], { type: 'application/octet-stream' }));
 			// @ts-expect-error: headers type
@@ -177,12 +187,13 @@ export const chibiUploader = async (options: UploaderOptions) => {
 
 	const actuallySendChunks = async (chunk: ArrayBuffer, index: number) => {
 		if (StopUploadsBecauseError) {
-			console.log('Skipping because of an error');
+			if (DEBUG) console.log('[ChibiUploader] Skipping because of an error');
 			return;
 		}
 
 		try {
 			const response = await sendChunk(chunk, index);
+			if (DEBUG) console.log('[ChibiUploader] sendChunk response', response);
 			if (!response) return;
 			if (response.status === 200 || response.status === 201 || response.status === 204) {
 				if (totalChunks > 1) {
@@ -190,10 +201,25 @@ export const chibiUploader = async (options: UploaderOptions) => {
 					const percentProgress = Math.round((100 / uploader.totalChunks) * index);
 					options.onProgress?.(uuid, percentProgress);
 					if (DEBUG) console.log('[ChibiUploader] Progress:', percentProgress, '%');
+
+					// Last chunk has a JSON response with the URL
+					if (uploader.totalChunks === index) {
+						try {
+							const apiResponse = await response.json();
+							if (apiResponse.url) {
+								options.onFinish?.(uuid, apiResponse);
+							} else {
+								options.onError?.(uuid, new Error('No URL returned by the server'));
+							}
+						} catch (error) {
+							console.log(error);
+							options.onError?.(uuid, new Error('There was a problem parsing the JSON response'));
+						}
+					}
 				}
 			} else if ([408, 502, 503, 504].includes(response.status)) {
 				if (uploader.paused || uploader.offline) return;
-				if (DEBUG) console.log('408, 502, 503, 504');
+				if (DEBUG) console.log('[ChibiUploader] Received response:', response.status);
 				manageRetries(index);
 			} else if (response.status === 413) {
 				options.onError?.(uuid, new Error(`Chunks are too big. Stopping upload`));
@@ -206,7 +232,6 @@ export const chibiUploader = async (options: UploaderOptions) => {
 		} catch (error: any) {
 			if (uploader.paused || uploader.offline) return;
 			console.log(error);
-			if (DEBUG) console.log('outer catch');
 			manageRetries(index);
 		}
 	};
@@ -239,7 +264,6 @@ export const chibiUploader = async (options: UploaderOptions) => {
 
 		// Otherwise send the response
 		if (DEBUG) console.log('[ChibiUploader] Upload finished');
-		options.onFinish?.(uuid, 'url');
 	};
 
 	const togglePause = async () => {
