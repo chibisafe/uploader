@@ -19,7 +19,7 @@ interface Options {
 	maxChunkSize: number;
 	allowedExtensions?: string[];
 	blockedExtensions?: string[];
-	DEBUG?: boolean;
+	debug?: boolean;
 }
 
 interface Result {
@@ -195,7 +195,7 @@ const handleFileWithChunks = (
 };
 
 export const processFile = async (req: IncomingMessage, options: Options) => {
-	if (options.DEBUG) {
+	if (options.debug) {
 		DEBUG = true;
 	}
 

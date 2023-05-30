@@ -10,7 +10,7 @@ export interface UploaderOptions {
 	maxParallelUploads: number;
 	allowedExtensions?: string[];
 	blockedExtensions?: string[];
-	DEBUG: boolean;
+	debug: boolean;
 	onStart?(uuid: string, totalChunks: number): void;
 	onError?(uuid: string, error: Error): void;
 	onProgress?(uuid: string, progress: number): void;
@@ -65,7 +65,7 @@ export const chibiUploader = async (options: UploaderOptions) => {
 		blockedExtensions = []
 	} = options;
 
-	DEBUG = Boolean(options.DEBUG);
+	DEBUG = Boolean(options.debug);
 	StopUploadsBecauseError = false;
 
 	validateOptions(options);
