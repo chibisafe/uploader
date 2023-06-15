@@ -1,11 +1,12 @@
 {
 	"name": "@chibisafe/uploader-module",
-	"version": "1.0.3",
+	"version": "1.0.4",
 	"description": "The chibisafe core uploader module",
 	"main": "lib/index.js",
 	"scripts": {
 		"dev": "ts-node demo/server.ts",
 		"build": "tsup",
+		"build:watch": "tsup --watch",
 		"lint": "prettier --check . && cross-env TIMING=1 eslint src --ext .ts",
 		"format": "prettier --write . && cross-env TIMING=1 eslint src --ext .ts --fix",
 		"test": "vitest"
