@@ -79,9 +79,12 @@ export const processFile = async (req: IncomingMessage, options: Options) => {
 	const upload = (await processBusboy(req, options)) as Result;
 	if (DEBUG) console.log('[ChibiUploader] Finished uploading file:', upload);
 
-	// Calculate the file size to pass back to the client
-	const inspect = await jetpack.inspectAsync(upload.path as string);
-	upload.metadata.size = inspect?.size as unknown as string;
+	// Calculate the file size to pass back to the client, but only if it's not a chunked upload,
+	// or if it's the last chunk
+	if (!upload.isChunkedUpload || (upload.isChunkedUpload && upload.ready)) {
+		const inspect = await jetpack.inspectAsync(upload.path as string);
+		upload.metadata.size = inspect?.size as unknown as string;
+	}
 
 	return upload;
 };
@@ -173,7 +176,7 @@ export const processBusboy = async (req: IncomingMessage, options: Options) => {
 			});
 
 			busboy.on('field', (key, val) => {
-				console.log('[ChibiUploader] Received metadata field:', key, val);
+				if (DEBUG) console.log('[ChibiUploader] Received metadata field:', key, val);
 				metadata[key] = val;
 			});
 
@@ -185,12 +188,13 @@ export const processBusboy = async (req: IncomingMessage, options: Options) => {
 				if (reachedFileSizeLimit) {
 					if (usingChunks) {
 						// If one of the chunks is too big there's a config problem so we delete the tmp folder
-						console.log('[ChibiUploader] Deleting chunk folder since one of the chunks is too big');
+						if (DEBUG)
+							console.log('[ChibiUploader] Deleting chunk folder since one of the chunks is too big');
 						await jetpack.removeAsync(path.join(options.destination, `${req.headers['chibi-uuid']}_tmp`));
 						reject(new Error('Chunk is too big'));
 					} else {
 						// If the file is too big we delete it
-						console.log('[ChibiUploader] Deleting file since it is too big');
+						if (DEBUG) console.log('[ChibiUploader] Deleting file since it is too big');
 						await jetpack.removeAsync(path.join(options.destination, uuid));
 						reject(new Error('File is too big'));
 					}
@@ -258,7 +262,7 @@ const handleSingleFile = async ({
 	uuid: string;
 	metadata: Record<string, string>;
 }) => {
-	console.log('[ChibiUploader] Handling single file upload');
+	if (DEBUG) console.log('[ChibiUploader] Handling single file upload');
 	const extension = path.extname(metadata.name);
 
 	if (isBlockedExtension(options.blockedExtensions ?? [], extension)) {
@@ -276,8 +280,7 @@ const handleSingleFile = async ({
 		});
 
 		writeStream.on('close', () => {
-			// Finished uploading
-			console.log('[ChibiUploader] Finished uploading handleSingleFile');
+			if (DEBUG) console.log('[ChibiUploader] Finished uploading handleSingleFile');
 			resolve({
 				isChunkedUpload: false,
 				ready: true,
@@ -300,7 +303,7 @@ const handleFileWithChunks = async ({
 	fileStream: Readable;
 	metadata: Record<string, string>;
 }) => {
-	console.log('[ChibiUploader] Handling chunked upload');
+	if (DEBUG) console.log('[ChibiUploader] Handling chunked upload');
 	const filePath = path.join(destination, `${headers['chibi-uuid']}`);
 	const dirPath = path.join(destination, `${headers['chibi-uuid']}_tmp`);
 	const chunkPath = path.join(dirPath, headers['chibi-chunk-number'] as string);
@@ -335,6 +338,7 @@ const handleFileWithChunks = async ({
 					totalChunks,
 					finished: true
 				});
+				return;
 			}
 
 			resolve({
@@ -387,7 +391,7 @@ const joinChunks = async ({
 						await jetpack.removeAsync(dirPath);
 						resolve({
 							isChunkedUpload: true,
-							ready: false,
+							ready: true,
 							path: finalFilePath
 						});
 					}
