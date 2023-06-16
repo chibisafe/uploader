@@ -260,10 +260,8 @@ export const processFile = async (req: IncomingMessage, options: Options) => {
 				});
 
 				if (usingChunks) {
-					// console.log('> Using Chunks');
 					fileStatus = handleFileWithChunks(options.destination, req.headers, fileStream, metadata);
 				} else {
-					// console.log('> Not Using Chunks');
 					metadata.name = info.filename;
 					metadata.type = info.mimeType;
 					fileStatus = handleFile(options.destination, req.headers, fileStream, uuid, metadata);
@@ -278,12 +276,13 @@ export const processFile = async (req: IncomingMessage, options: Options) => {
 				if (reachedFileSizeLimit) {
 					if (usingChunks) {
 						// If one of the chunks is too big there's a config problem so we delete the tmp folder
-						console.log('[ChibiUploader] Deleting chunk folder since one of the chunks is too big');
+						if (DEBUG)
+							console.log('[ChibiUploader] Deleting chunk folder since one of the chunks is too big');
 						await jetpack.removeAsync(path.join(options.destination, `${req.headers['chibi-uuid']}_tmp`));
 						reject(new Error('Chunk is too big'));
 					} else {
 						// If the file is too big we delete it
-						console.log('[ChibiUploader] Deleting file since it is too big');
+						if (DEBUG) console.log('[ChibiUploader] Deleting file since it is too big');
 						await jetpack.removeAsync(path.join(options.destination, uuid));
 						reject(new Error('File is too big'));
 					}
@@ -342,37 +341,3 @@ export const processFile = async (req: IncomingMessage, options: Options) => {
 		}
 	}) as Promise<Result>;
 };
-
-/*
-	TODO:
-		Check for file size on the header and delete the upload if it's too big
-		Check for file size after upload and delete the upload if it's too big
-
-		---
-		When both the client and the server are set to 90MB as the chunk size limit,
-		it seems the frontend is sending 90MB + few bytes, so the server rejects it.
-
-		The problem with this is that if its a chunked upload, the first chunk is deleted
-		but the following chunks are not, so the upload is left in a broken state.
-
-		If uploading a file of 120mb, the first chunk is deleted and the next one which is
-		only 30mb goes through smoothly. Need to think how to solve this.
-
-		Error log:
-		> Received new file
-		> Type: Chunked upload
-		> UUID: a3eea85b-c6bc-44ed-b61b-cd7f8dc42c2a
-		> Chunk number: 1/2
-		> Deleting chunk folder since one of the chunks is too big
-
-		> Received new file
-		> Type: Chunked upload
-		> UUID: a3eea85b-c6bc-44ed-b61b-cd7f8dc42c2a
-		> Chunk number: 2/2
-		> Name: hkrpg_ua_f491148198cd.exe
-		> Attempting to join chunks
-		> Chunk location: tmp\a3eea85b-c6bc-44ed-b61b-cd7f8dc42c2a_tmp\1
-		> Done: hkrpg_ua_f491148198cd.exe
-		readStream error
-		[Error: ENOENT: no such file or directory, open '.\tmp\a3eea85b-c6bc-44ed-b61b-cd7f8dc42c2a_tmp\1']
-*/
