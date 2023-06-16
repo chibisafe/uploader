@@ -1,14 +1,15 @@
 /* eslint-disable promise/prefer-await-to-callbacks */
 import path from 'node:path';
-import { createReadStream, createWriteStream } from 'node:fs';
-import type { FileInfo } from 'busboy';
+import fs, { createReadStream, createWriteStream } from 'node:fs';
 import Busboy from 'busboy';
 import jetpack from 'fs-jetpack';
 import { v4 as uuidv4 } from 'uuid';
-import Buffer from 'node:buffer';
-import { Readable, Writable } from 'node:stream';
-
 import type { IncomingMessage, IncomingHttpHeaders } from 'node:http';
+import type { Readable } from 'node:stream';
+
+interface FileMetadata {
+	[key: string]: string;
+}
 
 interface Options {
 	destination: string;
@@ -19,15 +20,11 @@ interface Options {
 	debug?: boolean;
 }
 
-interface FileMetadata {
-	[key: string]: string;
-}
-
 interface Result {
 	isChunkedUpload: boolean;
 	ready?: boolean;
 	path?: string;
-	metadata: FileMetadata;
+	metadata: Record<string, string>;
 }
 
 let DEBUG = false;
@@ -55,12 +52,143 @@ const isBiggerThanMaxSize = (maxFileSize: number, maxChunkSize: number, totalChu
 	return maxChunkSize * totalChunks > maxFileSize;
 };
 
-const isAllowedExtension = (allowedExtensions: string[], extension: string) => {
-	return allowedExtensions.includes(extension);
+const joinChunks = async (finalFile: string, dirPath: string, totalChunks: number) => {
+	if (DEBUG) console.log('[ChibiUploader] Attempting to join chunks');
+	const writeStream = createWriteStream(finalFile);
+
+	let chunkCount = 1;
+
+	return new Promise((resolve, reject) => {
+		const pipeChunk = async () => {
+			try {
+				if (DEBUG) console.log('[ChibiUploader] Chunk file:', path.join(dirPath, chunkCount.toString()));
+				const readStream = createReadStream(path.join(dirPath, chunkCount.toString()));
+
+				readStream.on('error', () => {
+					reject(new Error('Error reading chunk'));
+				});
+
+				readStream.on('data', chunk => {
+					if (!chunk) {
+						reject(new Error('Chunk is null'));
+					}
+
+					writeStream.write(chunk);
+				});
+
+				readStream.on('end', async () => {
+					chunkCount++;
+					if (chunkCount <= totalChunks) {
+						await pipeChunk();
+					} else {
+						writeStream.end();
+						if (DEBUG) console.log('[ChibiUploader] All chunks joined, deleting temp folder', dirPath);
+						await jetpack.removeAsync(dirPath);
+						resolve({ path: finalFile });
+					}
+				});
+			} catch (error: any) {
+				console.error(error);
+				return reject;
+			}
+		};
+
+		void pipeChunk();
+	});
 };
 
-const isBlockedExtension = (blockedExtensions: string[], extension: string) => {
-	return blockedExtensions.includes(extension);
+const handleFile = (
+	tmpDir: string,
+	headers: IncomingHttpHeaders,
+	fileStream: Readable,
+	uuid: string,
+	metadata: FileMetadata
+) => {
+	const filePath = path.join(tmpDir, `${uuid}${path.extname(metadata.name)}`);
+
+	const writeFile = new Promise<void>((resolve, reject) => {
+		const writeStream = fs.createWriteStream(filePath, { emitClose: true });
+
+		writeStream.on('error', err => {
+			fileStream.resume();
+			reject(err);
+		});
+
+		writeStream.on('close', () => {
+			resolve();
+		});
+
+		fileStream.pipe(writeStream);
+	});
+
+	return async (callback: any) => {
+		try {
+			await writeFile;
+			return callback(null, { path: filePath });
+		} catch (error) {
+			return callback(error);
+		}
+	};
+};
+
+const handleFileWithChunks = (
+	tmpDir: string,
+	headers: IncomingHttpHeaders,
+	fileStream: Readable,
+	metadata: FileMetadata
+) => {
+	const filePath = path.join(tmpDir, `${headers['chibi-uuid']}`);
+	const dirPath = path.join(tmpDir, `${headers['chibi-uuid']}_tmp`);
+	const chunkPath = path.join(dirPath, headers['chibi-chunk-number'] as string);
+	const chunkCount = Number(headers['chibi-chunk-number']);
+	const totalChunks = Number(headers['chibi-chunks-total']);
+
+	let customError: Error;
+
+	const writeFile = new Promise((resolve, reject) => {
+		const writeStream = fs.createWriteStream(chunkPath, { emitClose: true });
+
+		writeStream.on('error', err => {
+			fileStream.resume();
+			reject(err);
+		});
+
+		writeStream.on('close', async () => {
+			// If all chunks were uploaded
+			if (chunkCount === totalChunks) {
+				try {
+					await joinChunks(`${filePath}${path.extname(metadata.name)}`, dirPath, totalChunks);
+				} catch (error) {
+					console.error(error);
+				}
+
+				resolve(true);
+			}
+
+			resolve(false);
+		});
+
+		fileStream.pipe(writeStream);
+	});
+
+	// Create destination directory
+	jetpack.dir(dirPath);
+
+	// make sure chunk is in range
+	if (chunkCount < 0 || chunkCount > totalChunks) {
+		customError = new Error('Chunk is out of range');
+		fileStream.resume();
+	}
+
+	return async (callback: any) => {
+		try {
+			const joined = await writeFile;
+			if (joined) return callback(null, filePath);
+			return callback(null, false);
+		} catch (error) {
+			return callback(customError ?? error);
+		}
+	};
 };
 
 export const processFile = async (req: IncomingMessage, options: Options) => {
@@ -76,20 +204,6 @@ export const processFile = async (req: IncomingMessage, options: Options) => {
 	if (DEBUG) console.log('[ChibiUploader] maxFileSize:', options.maxFileSize);
 	if (DEBUG) console.log('[ChibiUploader] maxChunkSize:', options.maxChunkSize);
 
-	const upload = (await processBusboy(req, options)) as Result;
-	if (DEBUG) console.log('[ChibiUploader] Finished uploading file:', upload);
-
-	// Calculate the file size to pass back to the client, but only if it's not a chunked upload,
-	// or if it's the last chunk
-	if (!upload.isChunkedUpload || (upload.isChunkedUpload && upload.ready)) {
-		const inspect = await jetpack.inspectAsync(upload.path as string);
-		upload.metadata.size = inspect?.size as unknown as string;
-	}
-
-	return upload;
-};
-
-export const processBusboy = async (req: IncomingMessage, options: Options) => {
 	return new Promise((resolve, reject) => {
 		// Determine if we're using chunks or not
 		// To use chunks user needs to supply chibi-uuid, chibi-chunk-number and chibi-chunks-total headers
@@ -122,9 +236,9 @@ export const processBusboy = async (req: IncomingMessage, options: Options) => {
 		}
 
 		try {
+			let fileStatus: Function;
 			let reachedFileSizeLimit = false;
 			const metadata: Record<string, string> = {};
-			let busboyMetadata: FileInfo;
 
 			const busboy = Busboy({
 				headers: req.headers,
@@ -135,56 +249,30 @@ export const processBusboy = async (req: IncomingMessage, options: Options) => {
 				}
 			});
 
-			let busboyFileBuffer: Buffer;
-
-			busboy.on('file', (name, file, info) => {
+			busboy.on('file', (fieldname, fileStream, info) => {
 				// File name only appears on the last chunk
 				if (DEBUG && metadata.name) console.log(`[ChibiUploader] Name:`, metadata.name);
-				busboyMetadata = info;
-
-				// Save the file type from the mimeType returned by busboy
-				metadata.type = busboyMetadata.mimeType;
-
-				if (DEBUG)
-					console.log(
-						`[ChibiUploader] File [${name}]: filename: %j, encoding: %j, mimeType: %j`,
-						info.filename,
-						info.encoding,
-						info.mimeType
-					);
-
-				const chunks: Buffer[] = [];
-				const writable = new Writable({
-					write(chunk: any, encoding: any, callback: any) {
-						chunks.push(chunk);
-						callback();
-					}
-				});
-
-				file.pipe(writable);
-
-				file.on('close', () => {
-					busboyFileBuffer = Buffer.Buffer.concat(chunks);
-					if (DEBUG) console.log('[ChibiUploader] File closed');
-				});
 
 				// Triggered when file is too big
-				file.on('limit', () => {
+				fileStream.on('limit', () => {
 					reachedFileSizeLimit = true;
-					file.resume();
+					fileStream.resume();
 				});
+
+				if (usingChunks) {
+					fileStatus = handleFileWithChunks(options.destination, req.headers, fileStream, metadata);
+				} else {
+					metadata.name = info.filename;
+					metadata.type = info.mimeType;
+					fileStatus = handleFile(options.destination, req.headers, fileStream, uuid, metadata);
+				}
 			});
 
 			busboy.on('field', (key, val) => {
-				if (DEBUG) console.log('[ChibiUploader] Received metadata field:', key, val);
 				metadata[key] = val;
 			});
 
-			busboy.on('close', async () => {
-				if (DEBUG) console.log('[ChibiUploader] Busboy closed');
-
-				const busboyFileStream = bufferToStream(busboyFileBuffer);
-
+			busboy.on('finish', async () => {
 				if (reachedFileSizeLimit) {
 					if (usingChunks) {
 						// If one of the chunks is too big there's a config problem so we delete the tmp folder
@@ -202,215 +290,54 @@ export const processBusboy = async (req: IncomingMessage, options: Options) => {
 					return;
 				}
 
-				if (usingChunks) {
-					const upload = await handleFileWithChunks({
-						destination: options.destination,
-						headers: req.headers,
-						fileStream: busboyFileStream,
-						metadata
-					});
+				fileStatus?.(async (fileErr: Error, resultPromise: any) => {
+					if (fileErr) {
+						reject(fileErr);
+						return;
+					}
 
-					if (DEBUG) console.log('[ChibiUploader] Chunked upload finished', upload);
+					if (DEBUG) console.log('[ChibiUploader] Done:', metadata.name);
 
-					if (upload.finished) {
-						const stitchedUpload = await joinChunks({
-							finalFilePath: upload.finalFilePath,
-							dirPath: upload.dirPath,
-							totalChunks: upload.totalChunks
-						});
+					if (usingChunks) {
+						let filePath;
+						if (resultPromise) {
+							filePath = `${resultPromise}${path.extname(metadata.name)}`;
 
-						// @ts-expect-error not sure what the error is here
-						resolve({ ...stitchedUpload, metadata });
-					} else {
+							if (DEBUG) console.log('[ChibiUploader] Filename:', filePath);
+						}
+
 						resolve({
 							isChunkedUpload: true,
-							ready: false
+							ready: Boolean(resultPromise),
+							path: resultPromise ? filePath : undefined,
+							metadata
 						});
+						return;
 					}
-				} else {
-					// If it's a single file upload we set the name to the filename returned by busboy
-					metadata.name = busboyMetadata.filename;
 
-					const upload = await handleSingleFile({
-						options,
-						destination: options.destination,
-						fileStream: busboyFileStream,
-						uuid,
+					if (DEBUG) console.log('[ChibiUploader] Filename:', resultPromise.path);
+
+					try {
+						const stat = await jetpack.inspectAsync(resultPromise.path);
+						// eslint-disable-next-line require-atomic-updates
+						metadata.size = stat?.size.toString() ?? '0';
+					} catch {
+						// eslint-disable-next-line require-atomic-updates
+						metadata.size = '0';
+					}
+
+					resolve({
+						isChunkedUpload: false,
+						path: resultPromise.path,
 						metadata
 					});
-					resolve({ ...upload, metadata });
-				}
+				});
 			});
+
 			req.pipe(busboy);
 		} catch (error) {
 			reject(error);
 			console.log(error);
 		}
-	});
-};
-
-const handleSingleFile = async ({
-	options,
-	destination,
-	fileStream,
-	uuid,
-	metadata
-}: {
-	options: Options;
-	destination: string;
-	fileStream: Readable;
-	uuid: string;
-	metadata: Record<string, string>;
-}) => {
-	if (DEBUG) console.log('[ChibiUploader] Handling single file upload');
-	const extension = path.extname(metadata.name);
-
-	if (isBlockedExtension(options.blockedExtensions ?? [], extension)) {
-		await jetpack.removeAsync(path.join(destination, uuid));
-		throw new Error('File extension is blocked');
-	}
-
-	const filePath = path.join(destination, `${uuid}${path.extname(metadata.name)}`);
-	return new Promise<Record<string, any>>((resolve, reject) => {
-		const writeStream = createWriteStream(filePath);
-
-		writeStream.on('error', err => {
-			fileStream.resume();
-			reject(err);
-		});
-
-		writeStream.on('close', () => {
-			if (DEBUG) console.log('[ChibiUploader] Finished uploading handleSingleFile');
-			resolve({
-				isChunkedUpload: false,
-				ready: true,
-				path: filePath
-			});
-		});
-
-		fileStream.pipe(writeStream);
-	});
-};
-
-const handleFileWithChunks = async ({
-	destination,
-	headers,
-	fileStream,
-	metadata
-}: {
-	destination: string;
-	headers: IncomingHttpHeaders;
-	fileStream: Readable;
-	metadata: Record<string, string>;
-}) => {
-	if (DEBUG) console.log('[ChibiUploader] Handling chunked upload');
-	const filePath = path.join(destination, `${headers['chibi-uuid']}`);
-	const dirPath = path.join(destination, `${headers['chibi-uuid']}_tmp`);
-	const chunkPath = path.join(dirPath, headers['chibi-chunk-number'] as string);
-	const chunkCount = Number(headers['chibi-chunk-number']);
-	const totalChunks = Number(headers['chibi-chunks-total']);
-
-	// Create destination directory
-	jetpack.dir(dirPath);
-
-	return new Promise<Record<string, any>>((resolve, reject) => {
-		const writeStream = createWriteStream(chunkPath);
-
-		// make sure chunk is in range
-		if (chunkCount < 0 || chunkCount > totalChunks) {
-			reject(new Error('Chunk is out of range'));
-			fileStream.resume();
-		}
-
-		writeStream.on('error', err => {
-			reject(err);
-			fileStream.resume();
-		});
-
-		writeStream.on('close', async () => {
-			if (DEBUG) console.log('[ChibiUploader] Chunk file closed');
-			// If all chunks were uploaded
-			if (chunkCount === totalChunks) {
-				if (DEBUG) console.log('[ChibiUploader] All chunks uploaded');
-				resolve({
-					finalFilePath: `${filePath}${path.extname(metadata.name)}`,
-					dirPath,
-					totalChunks,
-					finished: true
-				});
-				return;
-			}
-
-			resolve({
-				finished: false
-			});
-		});
-
-		fileStream.pipe(writeStream);
-	});
-};
-
-const joinChunks = async ({
-	finalFilePath,
-	dirPath,
-	totalChunks
-}: {
-	finalFilePath: string;
-	dirPath: string;
-	totalChunks: number;
-}) => {
-	if (DEBUG) console.log('[ChibiUploader] Attempting to join chunks');
-
-	let chunkCount = 1;
-	return new Promise((resolve, reject) => {
-		const writeStream = createWriteStream(finalFilePath);
-		const pipeChunk = async () => {
-			try {
-				if (DEBUG) console.log('[ChibiUploader] Chunk file:', path.join(dirPath, chunkCount.toString()));
-				const readStream = createReadStream(path.join(dirPath, chunkCount.toString()));
-
-				readStream.on('error', () => {
-					reject(new Error('Error reading chunk'));
-				});
-
-				readStream.on('data', chunk => {
-					if (!chunk) {
-						reject(new Error('Chunk is null'));
-					}
-
-					writeStream.write(chunk);
-				});
-
-				readStream.on('end', async () => {
-					chunkCount++;
-					if (chunkCount <= totalChunks) {
-						await pipeChunk();
-					} else {
-						writeStream.end();
-						if (DEBUG) console.log('[ChibiUploader] All chunks joined, deleting temp folder', dirPath);
-						await jetpack.removeAsync(dirPath);
-						resolve({
-							isChunkedUpload: true,
-							ready: true,
-							path: finalFilePath
-						});
-					}
-				});
-			} catch (error: any) {
-				console.error(error);
-				return reject;
-			}
-		};
-
-		void pipeChunk();
-	});
-};
-
-const bufferToStream = (binary: Buffer) => {
-	return new Readable({
-		read() {
-			this.push(binary);
-			this.push(null);
-		}
-	});
+	}) as Promise<Result>;
 };
