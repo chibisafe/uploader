@@ -1,6 +1,6 @@
 {
 	"name": "@chibisafe/uploader-module",
-	"version": "1.0.6",
+	"version": "1.0.7",
 	"description": "The chibisafe core uploader module",
 	"main": "lib/index.js",
 	"scripts": {

@@ -139,7 +139,7 @@ const handleFileWithChunks = (
 ) => {
 	const filePath = path.join(tmpDir, `${headers['chibi-uuid']}`);
 	const dirPath = path.join(tmpDir, `${headers['chibi-uuid']}_tmp`);
-	const chunkPath = path.join(dirPath, headers['chibi-chunk-number'] as string);
+	const chunkPath = path.join(dirPath, String(headers['chibi-chunk-number']));
 	const chunkCount = Number(headers['chibi-chunk-number']);
 	const totalChunks = Number(headers['chibi-chunks-total']);
 
