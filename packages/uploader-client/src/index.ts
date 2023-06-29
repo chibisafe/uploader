@@ -105,8 +105,6 @@ export const chibiUploader = async (options: UploaderOptions) => {
 		return;
 	}
 
-	options.onStart?.(uuid, totalChunks);
-
 	const uploader: {
 		start: number;
 		chunkIndex: number;
@@ -170,7 +168,12 @@ export const chibiUploader = async (options: UploaderOptions) => {
 			});
 
 			xhr.upload.addEventListener('error', (event: Event) => {
-				options.onError?.(uuid, new Error(xhr.response));
+				try {
+					const message = JSON.parse(xhr.response).message;
+					options.onError?.(uuid, new Error(message));
+				} catch {
+					options.onError?.(uuid, new Error(xhr.response));
+				}
 			});
 
 			xhr.onreadystatechange = () => {
@@ -184,7 +187,12 @@ export const chibiUploader = async (options: UploaderOptions) => {
 							options.onError?.(uuid, new Error('There was a problem parsing the JSON response'));
 						}
 					} else {
-						options.onError?.(uuid, new Error(xhr.response));
+						try {
+							const message = JSON.parse(xhr.response).message;
+							options.onError?.(uuid, new Error(message));
+						} catch {
+							options.onError?.(uuid, new Error(xhr.response));
+						}
 					}
 				}
 			};
