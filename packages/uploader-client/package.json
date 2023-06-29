@@ -1,6 +1,6 @@
 {
 	"name": "@chibisafe/uploader-client",
-	"version": "1.0.8",
+	"version": "1.0.9",
 	"description": "The chibisafe core uploader client",
 	"main": "lib/index.js",
 	"scripts": {
