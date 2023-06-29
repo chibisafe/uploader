@@ -89,14 +89,21 @@ export const chibiUploader = async (options: UploaderOptions) => {
 
 	StopUploadsBecauseError = false;
 
-	validateOptions(options);
-	validateFileExtension(options.file, allowedExtensions, blockedExtensions);
-	validateSize(options.file, maxFileSize);
-
+	const uuid = globalThis.crypto.randomUUID();
 	const totalChunks = Math.ceil(file.size / chunkSize);
 	debug('Chunk size:', chunkSize);
 	debug('Total chunks:', totalChunks);
-	const uuid = globalThis.crypto.randomUUID();
+
+	options.onStart?.(uuid, totalChunks);
+
+	try {
+		validateOptions(options);
+		validateFileExtension(options.file, allowedExtensions, blockedExtensions);
+		validateSize(options.file, maxFileSize);
+	} catch (error: any) {
+		options.onError?.(uuid, error);
+		return;
+	}
 
 	options.onStart?.(uuid, totalChunks);
 
