@@ -10,5 +10,6 @@ packages/uploader-module/tmp
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+yarn.lock
 
 .turbo

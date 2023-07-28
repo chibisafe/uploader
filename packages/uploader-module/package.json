@@ -47,7 +47,8 @@
 		"uuid": "^9.0.0"
 	},
 	"volta": {
-		"node": "18.9.0"
+		"node": "19.0.0",
+		"yarn": "4.0.0-rc.48"
 	},
 	"keywords": [
 		"chibisafe",
