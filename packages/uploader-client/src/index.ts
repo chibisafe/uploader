@@ -1,3 +1,5 @@
+
+import { v4 as uuidv4 } from 'uuid';
 export interface UploaderOptions {
 	autoStart: boolean;
 	endpoint: string;
@@ -89,7 +91,6 @@ export const chibiUploader = async (options: UploaderOptions) => {
 
 	StopUploadsBecauseError = false;
 
-	const { v4: uuidv4 } = require('uuid');
 	let uuid = uuidv4();
 	let shortUuid = uuid.replace(/-/g, '').slice(0, 12);
 	uuid = shortUuid;
