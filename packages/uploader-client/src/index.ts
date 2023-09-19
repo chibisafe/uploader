@@ -1,3 +1,5 @@
+import { v4 as uuidv4 } from 'uuid';
+
 export interface UploaderOptions {
 	autoStart: boolean;
 	endpoint: string;
@@ -89,7 +91,7 @@ export const chibiUploader = async (options: UploaderOptions) => {
 
 	StopUploadsBecauseError = false;
 
-	const uuid = globalThis.crypto.randomUUID();
+	const uuid = uuidv4();
 	const totalChunks = Math.ceil(file.size / chunkSize);
 	debug('Chunk size:', chunkSize);
 	debug('Total chunks:', totalChunks);

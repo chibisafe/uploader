@@ -1,6 +1,6 @@
 {
 	"name": "@chibisafe/uploader-client",
-	"version": "1.0.9",
+	"version": "1.0.10",
 	"description": "The chibisafe core uploader client",
 	"main": "lib/index.js",
 	"scripts": {
@@ -49,5 +49,8 @@
 		"chunk",
 		"chunked upload",
 		"chunked uploader"
-	]
+	],
+	"dependencies": {
+		"uuid": "^9.0.1"
+	}
 }
