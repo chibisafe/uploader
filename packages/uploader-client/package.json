@@ -49,5 +49,8 @@
 		"chunk",
 		"chunked upload",
 		"chunked uploader"
-	]
+	],
+	"dependencies": {
+		"uuid": "^9.0.1"
+	}
 }
