@@ -185,8 +185,12 @@ export const chibiUploader = async (options: UploaderOptions) => {
 					if ([200, 201, 204].includes(xhr.status)) {
 						debug('Upload finished');
 						try {
-							const response = JSON.parse(xhr.response);
-							options.onFinish?.(uuid, response);
+							if (method === 'POST') {
+								const response = JSON.parse(xhr.response);
+								options.onFinish?.(uuid, response);
+							} else {
+								options.onFinish?.(uuid, null);
+							}
 						} catch {
 							options.onError?.(uuid, new Error('There was a problem parsing the JSON response'));
 						}
@@ -201,7 +205,7 @@ export const chibiUploader = async (options: UploaderOptions) => {
 				}
 			};
 
-			xhr.send(form);
+			xhr.send(method === 'PUT' ? file : form);
 		} else {
 			form.append('file', new Blob([chunk], { type: 'application/octet-stream' }));
 			// @ts-expect-error: headers type
