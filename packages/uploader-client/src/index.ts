@@ -14,6 +14,7 @@ export interface UploaderOptions {
 	allowedExtensions?: string[];
 	blockedExtensions?: string[];
 	debug: boolean;
+	method: 'POST' | 'PUT';
 	onStart?(uuid: string, totalChunks: number): void;
 	onError?(uuid: string, error: Error): void;
 	onProgress?(uuid: string, progress: number): void;
@@ -75,7 +76,8 @@ export const chibiUploader = async (options: UploaderOptions) => {
 		delayBeforeRetry = 3,
 		maxParallelUploads = 3,
 		allowedExtensions = [],
-		blockedExtensions = []
+		blockedExtensions = [],
+		method = 'POST'
 	} = options;
 
 	DEBUG = Boolean(options.debug);
@@ -157,7 +159,7 @@ export const chibiUploader = async (options: UploaderOptions) => {
 			form.append('file', file);
 
 			const xhr = new XMLHttpRequest();
-			xhr.open('POST', endpoint);
+			xhr.open(method, endpoint);
 
 			// @ts-expect-error: headers type
 			for (const key of Object.keys(headers)) xhr.setRequestHeader(key, headers[key]);
@@ -204,7 +206,7 @@ export const chibiUploader = async (options: UploaderOptions) => {
 			form.append('file', new Blob([chunk], { type: 'application/octet-stream' }));
 			// @ts-expect-error: headers type
 			headers['chibi-chunk-number'] = index;
-			return fetch(endpoint, { method: 'POST', headers, body: form });
+			return fetch(endpoint, { method, headers, body: form });
 		}
 	};
 

@@ -1,6 +1,6 @@
 {
 	"name": "@chibisafe/uploader-module",
-	"version": "1.0.10",
+	"version": "1.0.11",
 	"description": "The chibisafe core uploader module",
 	"main": "lib/index.js",
 	"scripts": {
@@ -46,8 +46,8 @@
 		"fs-jetpack": "^5.1.0",
 		"uuid": "^9.0.0"
 	},
-	"volta": {
-		"node": "18.9.0"
+	"engine": {
+		"node": ">=18.9.0"
 	},
 	"keywords": [
 		"chibisafe",

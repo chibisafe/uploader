@@ -16,8 +16,8 @@
 		"url": "https://github.com/Pitu"
 	},
 	"license": "MIT",
-	"volta": {
-		"node": "18.9.0"
+	"engine": {
+		"node": ">=18.9.0"
 	},
 	"packageManager": "yarn@3.5.1",
 	"workspaces": [
