@@ -246,7 +246,8 @@ export const processFile = async (req: IncomingMessage, options: Options) => {
 					files: 1,
 					// We add an extra 1024 bytes to the maxChunkSize to account for the metadata
 					fileSize: options.maxChunkSize + 1024
-				}
+				},
+				defParamCharset: 'utf8'
 			});
 
 			busboy.on('file', (fieldname, fileStream, info) => {
